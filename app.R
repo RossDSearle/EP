@@ -88,7 +88,7 @@ shiny::shinyApp(
 ##################################  NAVIGATION BAR   ##################################      
       navbar = f7Navbar(
        # title = shiny::tags$div(style="background-image: url('Logos/HdrBkGrdImage.PNG');", tags$img(src = "Logos/csiro.png", width = "40px", height = "40px"), "Boowora Agricultutral Research Station "),
-        title = tags$div( tags$div(style="vertical-align:middle!important; text-align:left!important; display:inline-block;", "EP Probe Network"), HTML('&nbsp&nbsp&nbsp'), tags$div(style="float: right;", tags$img(src = "Logos/EPARFLogo.png", width = "40px", height = "40px", align='right'))),
+        title = tags$div( tags$div(style="vertical-align:middle!important; text-align:left!important; display:inline-block;", "EP Probe Network"), HTML('&nbsp&nbsp&nbsp'), tags$div(style="float: right;", tags$img(src = "Logos/landscapeEP.png", width = "100px", height = "40px", align='right'))),
         hairline = T,
         shadow = T,
         left_panel = T,
@@ -167,7 +167,73 @@ shiny::shinyApp(
             )
           ), side = "left" )
         )
-      )
+      ,
+
+
+##################################  UI - WEATHER   ##################################          
+f7Tab(
+  tabName = "Weather",
+  icon = f7Icon("cloud_heavyrain_fill", old = F),
+  active = FALSE,
+  f7Float(  
+    f7Shadow(
+      intensity = 10,
+      hover = TRUE,
+      
+      tags$div( style=paste0("width: ", defWidth),
+                
+                f7Card(
+                  title = paste0("Todays Weather (", format(Sys.Date(), format="%B %d %Y"), ')' ),
+                  
+                  verbatimTextOutput("todaysRainfall"),
+                  verbatimTextOutput("todaysMaxRainfall"),
+                  HTML('<BR>'),
+                  verbatimTextOutput("todaysCurrentTemperature"),
+                  verbatimTextOutput("todaysMinTemperature"),
+                  verbatimTextOutput("todaysMaxTemperature"),
+                  HTML('<BR>'),
+                  verbatimTextOutput("todaysCurrentHumidity"),
+                  verbatimTextOutput("todaysMinHumidity"),
+                  verbatimTextOutput("todaysMaxHumidity"),
+                  HTML('<BR>'),
+                  verbatimTextOutput("todaysCurrentWindspeed"),
+                  verbatimTextOutput("todaysMinWindspeed"),
+                  verbatimTextOutput("todaysMaxWindspeed"),
+                  HTML('<BR>'),
+                  verbatimTextOutput("todaysCurrentWindDirection")
+                  # verbatimTextOutput("todaysMinHumidity"),
+                  # verbatimTextOutput("todaysMaxHumidity")
+                ))), side = "left"), 
+  
+  f7Float(  
+    f7Shadow(
+      intensity = 10,
+      hover = TRUE,
+      
+      tags$div( style=paste0("width: ", defWidth),           
+                f7Card(
+                  title = "Weather History",
+                  prettyRadioButtons(
+                    
+                    inputId = "WeatherHistoryButtons",
+                    label = "Variable:",
+                    
+                    c("Rainfall" = "Rainfall",
+                      "Temperature" = "Temperature",
+                      "Humidity" = "Humidity",
+                      "Windspeed" = "Wind-Speed"),
+                    inline = TRUE,
+                    status = "success",
+                    animation = "pulse",
+                    bigger = T
+                  ),
+                  dygraphOutput("WeatherHistoryChart", height = "300px")
+                )))), side = "left"))
+
+
+
+
+
     )
   ),
 
