@@ -71,8 +71,8 @@ plotPAW <- function(dfBucket, title='PAW', yscale=10){
   sby <- c(dfBucket$Depths, rev(dfBucket$Depths)) /yscale 
   svw <- c(dfBucket$LL,  rev(dfBucket$VolWater)) 
   
-  plot( 0, type="n", main=paste(title), 
-        xlab='Volumteric Soil Moisture (cm/cm)', ylab='Soil Depth (cm)',
+  plot( 0, type="n",  
+        xlab='Volumteric Soil Moisture (mm)', ylab='Soil Depth (cm)',
         yaxs = "i", xaxs = "i", xlim = c(min(dfBucket$LL)-5, max(dfBucket$DUL) + 5), ylim = rev(range(c(0,110))),
         cex.lab = 1.5
   )
@@ -163,13 +163,15 @@ soilDepthsDF <- data.frame(sdLabels, sdVals, stringsAsFactors = F)
 
 today <- str_replace(str_remove(Sys.Date()-hours(10), ' UTC'), ' ', 'T')
 
-probeSoilInfo <- read.csv('Data/AllProbeSoilParams.csv')
+probeSoilInfo <- read.csv('Data/AllProbeSoilParams.csv', stringsAsFactors = F)
 print(head(probeSoilInfo))
 
 
 
 probeSites <- unique(probeSoilInfo$sid)
+print(probeSites)
 probeLocs <- AllProbeLocs[AllProbeLocs$SiteID %in% probeSites, ]
+probeNames <- probeLocs$SiteName
 
 
 
@@ -229,11 +231,20 @@ shiny::shinyApp(
             hover = TRUE,
             tags$div( style=paste0("width: ", defWidth),
                       f7Card(
-                        title = "Click on a probe location to display info below. Scroll down to view results.",
-                        
-                        f7Select(inputId = 'SMDepth', label = "Select Soil Moisture Depth (cm)", c(30, 40, 50,60,70,80,90,100)),
+                        #title = "Click on a probe location to display info below. Scroll down to view results.",
+                        # pickerInput(
+                        #   inputId = 'wgtSiteID',
+                        #   label = "Select on a probe from the list below or click on map location. Scroll down to view results.", 
+                        #   choices = probeSites,
+                        #   inline = F,
+                        #   options = list(mobile = T)
+                        #   
+                        # ),
+                        f7Select(inputId = 'wgtSiteID', label = "Select on a probe from the list below or click on map location. Scroll down to view results.", choices = probeNames),
+                        HTML('<BR>'),
+                       # f7Select(inputId = 'wgtSiteID', label = "Select SM Probe", choices = probeNames),
                        # HTML('<BR>'),
-                       f7Picker('wgtSiteID', 'Site Id', choices = probeSites),
+                       #f7Picker('wgtSiteID', 'Site Id', choices = probeSites),
                         leafletOutput("SoilMoistureProbeMap", height = 400 )
                         
                       )
@@ -246,7 +257,7 @@ shiny::shinyApp(
               hover = TRUE,
               tags$div( style=paste0("width: ", defWidth),
                         f7Card(
-                          title = 'Soil Water Bucket',
+                          title = '',
                           plotOutput("bucketPlot")
                         )
               )
@@ -290,6 +301,37 @@ shiny::shinyApp(
       ,
 
 
+      
+      f7Tab(
+        tabName = "History",
+        icon = f7Icon("alarm", old = F),
+        active = FALSE,
+        f7Float(  
+          f7Shadow(
+            intensity = 10,
+            hover = TRUE,
+            
+            tags$div( style=paste0("width: ", 300),
+                      
+                      f7Card(
+                        title = paste0("Todays Weather (", format(Sys.Date(), format="%B %d %Y"), ')' ),
+                        
+                        htmlOutput("historyVideo")
+                        
+                        
+                      )
+            )
+          )
+        )
+      ),
+      
+      
+      
+      
+      
+      
+      
+      
 ##################################  UI - WEATHER   ##################################          
 f7Tab(
   tabName = "Weather",
@@ -348,7 +390,7 @@ f7Tab(
                     bigger = T
                   ),
                   dygraphOutput("WeatherHistoryChart", height = "300px")
-                )))), side = "left"))
+                )))), side = "left")),
 
 
 
@@ -377,6 +419,20 @@ f7Tab(
     ##################################  SERVER - GLOBAL PROCESSING   ##################################
     
     acm_defaults <- function(map, x, y) addCircleMarkers(map, x, y, radius=8, color="black", fillColor="orange", fillOpacity=1, opacity=1, weight=2, stroke=TRUE, layerId="Selected")
+    
+    output$historyVideo <- renderUI({
+      
+      req( input$wgtSiteID)
+      sn <- input$wgtSiteID
+      sitename <- str_replace_all(sn, ' ', '_')
+      #t <- paste0('<iframe width="360" height="560" src="History/', 'movie' , '.m4v" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>')
+      
+      t <- '<iframe width="460" height="500" src="https://www.youtube.com/embed/5d49tI022Bc" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>'
+      HTML(paste(t))
+    })
+    
+    
+    
     
     ########  Get sensor locations   ##############
     
