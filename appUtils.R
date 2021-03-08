@@ -1,9 +1,5 @@
 
 
-
-
-#getBucket(SiteID='op26357', currentSW=NULL)
-
 getBucket <- function(SiteID, currentSW, probeInfo){
 
   rec <- tail(currentSW, 1)
@@ -15,27 +11,19 @@ getBucket <- function(SiteID, currentSW, probeInfo){
   
   x <- c(b2$LL,  rev(b2$UL))
   y <- c(b2$depth,  rev(b2$depth))
-  
-  # x <- c(15, 15, 16, 17, 18, 20, 20, 22, 40,  42, 42, 43, 45, 46, 47, 48)
-  # y <- c(30, 40, 50, 60, 70, 80, 90, 100, 100, 90, 80, 70, 60, 50, 40, 30)
-  
+
   xm <- c(b2$LL,  rev(recv[,1]))
   ym <- c(b2$depth,  rev(b2$depth))
-  
-
-  # xm <- c(15, 15, 16, 17, 18, 20, 20, 22, rev(recv[,1]))
-  # ym <- c(30, 40, 50, 60, 70, 80, 90, 100, 100, 90, 80, 70, 60, 50, 40, 30)
   
   dfBucket <- data.frame(x,y)
   dfWater <- data.frame(xm,ym)
   res <- list()
   res$dfBucket <- dfBucket
   res$dfWater <- dfWater
-  
-  print(min(b2$LL))
+
   res$minx <- min(b2$LL)
   res$maxx <- max(b2$UL)
-  #outDF <- c(dfBucket, dfWater)
+
   return(res)
 }
 
