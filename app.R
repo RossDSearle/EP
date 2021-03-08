@@ -120,6 +120,18 @@ shiny::shinyApp(
             )
           ), side = "left" ),
           
+          f7Float( 
+            f7Shadow(
+              intensity = 10,
+              hover = TRUE,
+              tags$div( style=paste0("width: ", defWidth),
+                        f7Card(
+                          title = 'Soil Water Bucket',
+                          plotOutput("bucketPlot")
+                        )
+              )
+            ), side = "left" ),
+          
           
           f7Float(  f7Shadow(
             intensity = 100,
@@ -151,18 +163,6 @@ shiny::shinyApp(
                         
                         dygraphOutput("mositureChart1", width = "350", height = "300px")
                         
-                      )
-            )
-          ), side = "left" ),
-          
-          f7Float( 
-            f7Shadow(
-            intensity = 10,
-            hover = TRUE,
-            tags$div( style=paste0("width: ", defWidth),
-                      f7Card(
-                        title = 'Soil Water Bucket',
-                        plotOutput("bucketPlot")
                       )
             )
           ), side = "left" )
