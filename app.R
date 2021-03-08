@@ -11,7 +11,7 @@ library(stringr)
 library(raster)
 library(rgdal)
 library(rhandsontable)
-
+library(viridis)
 library(shinyjs)
 library(shinyalert)
 library(shinyBS)
@@ -20,6 +20,109 @@ library(lubridate)
 library(shinybusy)
 
 #library(flexdashboard)
+
+pingAPI <- function(url){
+  
+  r <- GET(url)
+    resp <- GET(url, timeout(300))
+    if(http_error(resp)){
+      return(NULL)
+    }
+  response <- content(resp, "text", encoding = 'UTF-8')
+  return(response)
+}
+
+getTotalAvailableSoilWater <- function(bucket){
+  
+  lvw_mm <- (bucket$VolWater - bucket$LL) / 100 * bucket$Thickness
+  lawc_mm <- (bucket$DUL - bucket$LL) / 100 * bucket$Thickness
+  l = list()
+  l$AvailWater_mm = sum(lvw_mm)
+  l$AWC_mm = sum(lawc_mm)
+  return(l)
+  
+}
+
+getProfileWater <- function(rawProbeVals, soilParams){
+  print(soilParams)
+  volVals <- data.frame(depth=numeric(nrow(soilParams)), Vol=numeric(nrow(soilParams)))
+  volVals[,] <- NA
+  for (i in 1:ncol(rawProbeVals)) {
+    print(i)
+    rec <- soilParams[i, ]
+    coln <- colnames(rawProbeVals)[i]
+    print(coln)
+    depth <- as.numeric(str_split(coln, '_')[[1]][2])
+    volVal <- getVolumetricValue(pParams=soilParams, depth=depth, probeVal=as.numeric(rawProbeVals[,i]) )
+    volVals[i,1] <- depth
+    volVals[i, 2] <- volVal
+  }
+  
+  volVals <- na.omit(volVals)
+  d1 <- volVals[order(volVals$depth),]
+  return(na.omit(d1))
+}
+
+
+
+plotPAW <- function(dfBucket, title='PAW', yscale=10){
+  
+  sbx <- c(dfBucket$LL, rev(dfBucket$DUL))
+  sby <- c(dfBucket$Depths, rev(dfBucket$Depths)) /yscale 
+  svw <- c(dfBucket$LL,  rev(dfBucket$VolWater)) 
+  
+  plot( 0, type="n", main=paste(title), 
+        xlab='Volumteric Soil Moisture (cm/cm)', ylab='Soil Depth (cm)',
+        yaxs = "i", xaxs = "i", xlim = c(min(dfBucket$LL)-5, max(dfBucket$DUL) + 5), ylim = rev(range(c(0,110))),
+        cex.lab = 1.5
+  )
+  
+  polygon(sbx,sby,
+          col=c("navajowhite3"),
+          border=c("navajowhite3"),
+          lwd=1, lty=c("solid"))
+  
+  polygon(svw,sby,
+          col=c("lightskyblue"),
+          border=c("lightskyblue"),
+          lwd=1, lty=c("solid"))
+}
+
+getBucket <- function(soilAWCValues){
+  
+  bp<- soilAWCValues
+  LL <- bp$LL * 100
+  DUL <- bp$DUL * 100
+  Depths <-  bp$depth
+  VolWater <- bp$Vol * 100
+  Thickness= bp$Thickness
+  outDF <- data.frame(LL,DUL, VolWater, Depths,Thickness)
+  return(outDF)
+  
+}
+
+getVolumetricValue <- function(pParams, depth, probeVal){
+  
+  print('here1')
+  rec <- pParams[pParams$depth == depth, ]
+  minp <- rec$minProbe
+  maxp <- rec$maxProbe
+  dul <- rec$modDUL
+  ll <- rec$modLL
+ 
+  mmperpv <-  (dul-ll)/ (maxp - minp)
+  #dv <- dayVals$Soil.Moisture_1000
+  vol <- ll + (mmperpv * (probeVal-minp))
+  print(vol)
+  print('here2')
+  return(vol)
+}
+
+
+
+
+
+network = 'EPARF'
 
 
 defWidth = '380px'
@@ -33,7 +136,7 @@ if(machineName=='soils-discovery'){
   source(paste0( rootDir, '/appUtils.R'))
   
 }else{
-  rootDir <- 'C:/Users/sea084/Dropbox/RossRCode/Git/Shiny/EP'
+  rootDir <- 'C:/Users/sea084/OneDrive - CSIRO/RossRCode/Git/Shiny/EP'
   dataStoreDir <- 'C:/Temp/boorowa_2019/data/processed'
   source(paste0( rootDir, '/appUtils.R'))
 }
@@ -41,10 +144,17 @@ if(machineName=='soils-discovery'){
 SenFedServer <- 'http://esoil.io/SensorFederationWebAPI/SensorAPI'
 probeInfo <- read.csv(paste0(rootDir, '/probeInfo.csv'))
 head(probeInfo)
-probeLocs <- read.csv(paste0(rootDir, '/probeLocs.csv'))
-head(probeLocs)
+#probeLocs <- read.csv(paste0(rootDir, '/probeLocs.csv'))
+#head(probeLocs)
+
+probeLocsURL <- paste0('http://esoil.io/SensorFederationWebAPI/SensorAPI/getSensorLocations?sensorgroup=', network)
+probeLocsJSON <- pingAPI(probeLocsURL)
+AllProbeLocs <- fromJSON(probeLocsJSON)
+#soilPolys <- sf::read_sf('C:/Projects/EP/Soil Data/EPSoils4.shp')
 
 today <- paste0(Sys.Date(), 'T00:00:00')
+
+today
 
 sdLabels <- c('30 cm', '40 cm','50 cm','60 cm','70 cm','80 cm','90 cm','100 cm')
 sdVals <- c('0', '1', '2','3','4','4','6','7')
@@ -53,6 +163,13 @@ soilDepthsDF <- data.frame(sdLabels, sdVals, stringsAsFactors = F)
 
 today <- str_replace(str_remove(Sys.Date()-hours(10), ' UTC'), ' ', 'T')
 
+probeSoilInfo <- read.csv('Data/AllProbeSoilParams.csv')
+print(head(probeSoilInfo))
+
+
+
+probeSites <- unique(probeSoilInfo$sid)
+probeLocs <- AllProbeLocs[AllProbeLocs$SiteID %in% probeSites, ]
 
 
 
@@ -105,6 +222,8 @@ shiny::shinyApp(
           tabName = "SM Probes",
           icon = f7Icon("layers_fill", old = TRUE),
           active = TRUE,
+          
+          
           f7Float( f7Shadow(
             intensity = 10,
             hover = TRUE,
@@ -112,13 +231,26 @@ shiny::shinyApp(
                       f7Card(
                         title = "Click on a probe location to display info below. Scroll down to view results.",
                         
-                       # f7Select(inputId = 'SMDepth', label = "Select Soil Moisture Depth (cm)", c(30, 40, 50,60,70,80,90,100)),
+                        f7Select(inputId = 'SMDepth', label = "Select Soil Moisture Depth (cm)", c(30, 40, 50,60,70,80,90,100)),
                        # HTML('<BR>'),
+                       f7Picker('wgtSiteID', 'Site Id', choices = probeSites),
                         leafletOutput("SoilMoistureProbeMap", height = 400 )
                         
                       )
             )
           ), side = "left" ),
+          
+          f7Float( 
+            f7Shadow(
+              intensity = 10,
+              hover = TRUE,
+              tags$div( style=paste0("width: ", defWidth),
+                        f7Card(
+                          title = 'Soil Water Bucket',
+                          plotOutput("bucketPlot")
+                        )
+              )
+            ), side = "left" ),
           
           
           f7Float(  f7Shadow(
@@ -151,18 +283,6 @@ shiny::shinyApp(
                         
                         dygraphOutput("mositureChart1", width = "350", height = "300px")
                         
-                      )
-            )
-          ), side = "left" ),
-          
-          f7Float( 
-            f7Shadow(
-            intensity = 10,
-            hover = TRUE,
-            tags$div( style=paste0("width: ", defWidth),
-                      f7Card(
-                        title = 'Soil Water Bucket',
-                        plotOutput("bucketPlot")
                       )
             )
           ), side = "left" )
@@ -249,7 +369,7 @@ f7Tab(
     RV$sensorLocs <- probeLocs
     RV$currentSoil <- NULL
     RV$SoilMOistureSensors <- NULL
-    RV$m <- NULL
+    RV$currentSoilMoisturePercent <- NULL
     RV$TodaysWeather <- NULL
     RV$HistoricalRainfall <- NULL
     
@@ -261,8 +381,72 @@ f7Tab(
     ########  Get sensor locations   ##############
     
     observe({
-     # RV$sensorLocs <- probeLocs
+      
+      req(RV$currentSite)
+      
+      isolate({
+      today <- str_replace(str_remove(Sys.Date()-hours(10), ' UTC'), ' ', 'T')
+      
+      # url <- paste0('http://esoil.io/SensorFederationWebAPI/SensorAPI/getSensorDataStreams?siteid=', RV$currentSite, '&sensortype=Rainfall&aggperiod=hours&startdate=',today)
+      # print(url)
+      # response <- GET(url)
+      # stream <- content(response, as="text", encoding	='UTF-8')
+      # ts <- convertJSONtoTS(stream)
+      # RV$TodaysWeather=NULL
+      # RV$TodaysWeather$Rainfall <- sum(ts)
+      # RV$TodaysWeather$MaxRainfall <- max(ts)
+      
+      # url <- paste0('http://esoil.io/SensorFederationWebAPI/SensorAPI/getSensorDataStreams?siteid=', RV$currentSite,'&sensortype=Temperature&aggperiod=none&startdate=',today)
+      # print(url)
+      # response <- GET(url)
+      # stream <- content(response, as="text", encoding	='UTF-8')
+      # print(stream)
+      # ts <- convertJSONtoTS(stream)
+      # RV$TodaysWeather$CurrentTemp <- tail(ts, 1)
+      # RV$TodaysWeather$MinTemp <- min(ts)
+      # RV$TodaysWeather$MaxTemp <- max(ts)
+      
+      
+      # url <- paste0('http://esoil.io/SensorFederationWebAPI/SensorAPI/getSensorDataStreams?siteid=', RV$currentSite,'&sensortype=Humidity&aggperiod=none&startdate=',today)
+      # print(url)
+      # response <- GET(url)
+      # stream <- content(response, as="text", encoding	='UTF-8')
+      # ts <- convertJSONtoTS(stream)
+      # RV$TodaysWeather$CurrentHumidity <- tail(ts, 1)
+      # RV$TodaysWeather$MinHumidity <- min(ts)
+      # RV$TodaysWeather$MaxHumidity <- max(ts)
+      # 
+      # url <- paste0('http://esoil.io/SensorFederationWebAPI/SensorAPI/getSensorDataStreams?siteid=', RV$currentSite,'&sensortype=Wind-Speed&aggperiod=none&startdate=',today)
+      # print(url)
+      # response <- GET(url)
+      # stream <- content(response, as="text", encoding	='UTF-8')
+      # ts <- convertJSONtoTS(stream)
+      # RV$TodaysWeather$CurrentWindSpeed <- tail(ts, 1)
+      # RV$TodaysWeather$MaxWindSpeed <- max(ts, 1)
+      # RV$TodaysWeather$MinWindSpeed <- min(ts, 1)
+      
+     
+      })
+      
+      
     })
+    
+    output$todaysRainfall <- renderText({paste0('Rainfall : ', RV$TodaysWeather$Rainfall, ' mm') })
+    output$todaysMaxRainfall <- renderText({paste0('Maximum Rainfall : ', RV$TodaysWeather$Rainfall, ' mm/hr') })
+    
+    output$todaysCurrentTemperature <- renderText({paste0('Current Temperature : ', RV$TodaysWeather$CurrentTemp,  intToUtf8(176), 'C') })
+    output$todaysMaxTemperature <- renderText({ paste0('Maximum Temperature : ', RV$TodaysWeather$MaxTemp,  intToUtf8(176), 'C') })
+    output$todaysMinTemperature <- renderText({ paste0('Minimum Temperature : ', RV$TodaysWeather$MinTemp,  intToUtf8(176), 'C') })
+    
+    output$todaysCurrentHumidity <- renderText({paste0('Current Humidity : ', RV$TodaysWeather$CurrentHumidity, '%') })
+    output$todaysMaxHumidity <- renderText({ paste0('Maximum Humidity : ', RV$TodaysWeather$MaxHumidity, '%') })
+    output$todaysMinHumidity <- renderText({ paste0('Minimum Humidity : ', RV$TodaysWeather$MinHumidity, '%') })
+    
+    output$todaysCurrentWindspeed <- renderText({ paste0('Current Wind Speed : ',  RV$TodaysWeather$CurrentWindSpeed , ' km/hr') })
+    output$todaysMinWindspeed <- renderText({ paste0('Maximum Wind Speed : ',  RV$TodaysWeather$MaxWindSpeed , ' km/hr') })
+    output$todaysMaxWindspeed <- renderText({ paste0('Minimum Wind Speed : ',  RV$TodaysWeather$MinWindSpeed , ' km/hr') })
+    
+    
     
 
     ##################################  SERVER - SOIL PROBE MAP   ##################################   
@@ -272,36 +456,28 @@ f7Tab(
     output$bucketPlot <- renderPlot({
       req( RV$currentTS)
       
+      sid <- RV$currentSite
       
-      res <- getBucket(RV$currentSite, RV$currentTS, probeInfo = probeInfo)
+      soilInfo <- probeSoilInfo[probeSoilInfo$sid==sid,]
+      dtnow <- Sys.Date()
       
+      dt <- min(dtnow, end(RV$currentTS))
       
-      sw <- round(RV$currentTS[1,1], digits = 1)
+      dayVals <-  RV$currentTS[dt]
+      
+      pw <- getProfileWater(rawProbeVals = dayVals, soilParams = soilInfo)
+      soilAWCValues <- data.frame(sid=soilInfo$sid, depth=soilInfo$depth, LL=soilInfo$modLL, DUL=soilInfo$modDUL, Thickness=soilInfo$thickness)
+      svals <- merge(soilAWCValues, pw, by='depth')
+      dfBucket <- getBucket(soilAWCValues=svals)
+
+      swt <- getTotalAvailableSoilWater(dfBucket)
+      swp <- swt$AvailWater_mm/swt$AWC_mm * 100
+      
+      plotPAW(dfBucket = dfBucket, title=sid, yscale=10)
+      
+      sw = round(swp, digits=0)
       updateF7Gauge(session, id = 'swTotGauge', value = sw)
-      RV$m = sw
-      
-      plot( 0, type="n", main=paste( ''), 
-            xlab='Volumteric Soil Mositure (%)', ylab='Soil Depth (cm)',
-            yaxs = "i", xaxs = "i", xlim = c(res$minx, res$maxx),  ylim = rev(range(c(0,100))),
-           # yaxs = "i", xaxs = "i", xlim = c(10, 50), ylim = rev(range(c(0,100))),
-            cex.lab = 1.5
-      )
-      
-      dfBucket <- res$dfBucket
-      dfWater <- res$dfWater
-      
-      print(dfBucket)
-      print(dfWater)
-      
-      polygon(dfBucket$x,dfBucket$y,
-              col=c("navajowhite3"),
-              border=c("navajowhite3"),
-              lwd=1, lty=c("solid"))
-      
-      polygon(dfWater$xm, dfWater$ym,
-              col=c("lightskyblue"),
-              border=c("lightskyblue"),
-              lwd=1, lty=c("solid"))
+      RV$currentSoilMoisturePercent = sw
       
     })
     
@@ -318,15 +494,18 @@ f7Tab(
       
       sid <- click$id
       print(sid)
-      startDate <- '2020-03-01T00:00:00'
-      url <- paste0(SenFedServer, "/getSensorDataStreams?siteid=", sid,"&sensortype=", DataType, "&aggperiod=days&startdate=", startDate)
+      startDate <- '2021-01-01T00:00:00'
+      endDate <- '2021-03-08T23:00:00'
+      url <- paste0(SenFedServer, "/getSensorDataStreams?siteid=", sid,"&sensortype=", DataType, "&aggperiod=days&startdate=", startDate, "&enddate=", endDate)
       print(url)
       
       response <- GET(url)
-      stop_for_status(response) 
+     # stop_for_status(response) 
       sensorData <- content(response, as="text")
+      
       ts <- convertJSONtoTS(sensorData)
-      RV$currentTS <- ts
+      ts2 <- xts(coredata(ts), as.Date(index(ts)))
+      RV$currentTS <- ts2
       RV$currentSite <- sid
     })
     
@@ -396,7 +575,9 @@ f7Tab(
       colCnt <- length(unique(sdf[,input$SensorLabel]))
       colCats <- unique(sdf[,input$SensorLabel])
       colField <- sdf[,input$SensorLabel]
-      factpal <-colorFactor(RColorBrewer::brewer.pal(colCnt, 'Spectral'), colField)
+      #factpal <-colorFactor(RColorBrewer::brewer.pal(colCnt, 'Spectral'), colField)
+     # ppal <- colorFactor(viridis(7), soilPolys$LANSLU) # I'm assuming the variable ward contains the names of the communities.
+      
       
       proxy <- leafletProxy("SoilMoistureProbeMap", data = RV$sensorLocs)
       proxy %>% clearMarkers()
@@ -409,6 +590,13 @@ f7Tab(
                                     radius = 10,
                                     layerId=paste0(sdf$SiteID),
                                     group = "SW Probes" )
+      # proxy %>% addPolygons(data=soilPolys, color = ppal, weight = 1, 
+      #             opacity = 1.0, fillOpacity = 0.5,
+      #             fillColor = ppal,
+      #             smoothFactor = 0.1,
+      #             group = "Soils",
+      #             highlightOptions = highlightOptions(color = "white", weight = 2, bringToFront = TRUE )
+      # )
       
     
         # proxy %>%  addPolygons(color = "#444444", weight = 1, smoothFactor = 0.5,
